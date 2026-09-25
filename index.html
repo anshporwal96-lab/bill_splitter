@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Split a restaurant bill by what each person ate, with tax shared equally." />
+    <title>TableSplit | Restaurant bill splitter</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <main class="shell">
+      <header class="hero">
+        <div class="brand-mark" aria-hidden="true">TS</div>
+        <div>
+          <p class="eyebrow">Restaurant bill splitter</p>
+          <h1>Everyone pays for <em>their</em> plate.</h1>
+          <p class="hero-copy">Add what was ordered, mark it veg or non-veg, and let TableSplit handle the fair math.</p>
+        </div>
+      </header>
+
+      <div class="layout">
+        <section class="card setup-card">
+          <div class="section-heading">
+            <div>
+              <p class="step">01</p>
+              <h2>Who's at the table?</h2>
+            </div>
+            <span class="count-pill" id="personCount">0 people</span>
+          </div>
+          <form class="inline-form" id="personForm">
+            <label class="sr-only" for="personName">Person's name</label>
+            <input id="personName" type="text" placeholder="e.g. Maya" maxlength="24" autocomplete="off" />
+            <button class="button button-dark" type="submit">Add person <span>+</span></button>
+          </form>
+          <div class="people-list" id="peopleList">
+            <p class="empty-state">Add everyone sharing the bill.</p>
+          </div>
+        </section>
+
+        <section class="card setup-card">
+          <div class="section-heading">
+            <div>
+              <p class="step">02</p>
+              <h2>What did you order?</h2>
+            </div>
+            <span class="count-pill" id="itemCount">0 items</span>
+          </div>
+          <form class="item-form" id="itemForm">
+            <div class="form-row">
+              <div class="field field-wide">
+                <label for="itemName">Dish or drink</label>
+                <input id="itemName" type="text" placeholder="e.g. Paneer tikka" maxlength="40" autocomplete="off" />
+              </div>
+              <div class="field">
+                <label for="itemPrice">Price</label>
+                <div class="money-input"><span>₹</span><input id="itemPrice" type="number" min="0.01" step="0.01" placeholder="0.00" /></div>
+              </div>
+              <div class="field quantity-field">
+                <label for="itemQuantity">Qty</label>
+                <input id="itemQuantity" type="number" min="1" step="1" value="1" aria-label="Item quantity" />
+              </div>
+            </div>
+            <div class="form-row item-options">
+              <fieldset class="category-picker">
+                <legend>Category</legend>
+                <label class="category-option veg-option"><input type="radio" name="category" value="veg" checked /><span class="radio-dot"></span>Veg</label>
+                <label class="category-option nonveg-option"><input type="radio" name="category" value="nonveg" /><span class="radio-dot"></span>Non-veg</label>
+              </fieldset>
+              <div class="field assign-field">
+                <label for="itemPeople">Eaten by</label>
+                <select id="itemPeople" multiple size="1" aria-label="People who ate this item"></select>
+                <small>Hold Ctrl/Cmd to select more than one</small>
+              </div>
+            </div>
+            <button class="button button-coral add-item-button" type="submit">Add to the bill <span>+</span></button>
+          </form>
+          <div class="items-list" id="itemsList">
+            <p class="empty-state">Your dishes will show up here.</p>
+          </div>
+          <div class="scan-box">
+            <div class="scan-heading">
+              <div>
+                <p class="scan-label">Long bill?</p>
+                <h3>Find food items</h3>
+              </div>
+              <span class="scan-icon" aria-hidden="true">⌁</span>
+            </div>
+            <p>Upload a clear photo and we’ll extract only the food items and their prices.</p>
+            <label class="upload-button" for="billImage">Choose bill image</label>
+            <input id="billImage" type="file" accept="image/*" />
+            <div class="scan-status" id="scanStatus" aria-live="polite"></div>
+            <div class="detected-list" id="detectedList"></div>
+          </div>
+        </section>
+
+        <section class="card summary-card">
+          <div class="section-heading summary-heading">
+            <div>
+              <p class="step">03</p>
+              <h2>Set the tax</h2>
+            </div>
+            <div class="rate-input"><label for="taxRate">Tax</label><div class="tax-input"><input id="taxRate" type="number" min="0" step="0.1" value="10" aria-label="Tax percentage" /><span>%</span></div></div>
+          </div>
+          <p class="hint">Tax and tip are calculated on the food total and split equally between everyone.</p>
+          <div class="summary-table" id="summaryTable">
+            <p class="empty-state">Add people and items to see the split.</p>
+          </div>
+          <div class="tip-control">
+            <label for="tipRate">Tip for the staff</label>
+            <div class="tip-input"><input id="tipRate" type="number" min="0" step="1" value="10" aria-label="Tip percentage" /><span>%</span></div>
+            <small>Tip is split equally.</small>
+          </div>
+          <div class="discount-control">
+            <label for="discountRate">Apply a discount</label>
+            <select id="discountRate" aria-label="Discount percentage">
+              <option value="0">No discount</option>
+              <option value="10">10% off</option>
+              <option value="15">15% off</option>
+              <option value="20">20% off</option>
+            </select>
+            <small id="discountStatus">Choose a restaurant offer.</small>
+          </div>
+          <div class="totals" id="totals">
+            <div><span>Food total</span><strong>₹0.00</strong></div>
+            <div><span>Discount applied</span><strong>−₹0.00</strong></div>
+            <div><span>Tax <small id="taxLabel">(10%)</small></span><strong>₹0.00</strong></div>
+            <div><span>Tip <small id="tipLabel">(10%)</small></span><strong>₹0.00</strong></div>
+            <div class="grand-total"><span>Total bill</span><strong>₹0.00</strong></div>
+          </div>
+          <button class="button button-outline" id="resetButton" type="button">Start over</button>
+        </section>
+      </div>
+          <footer>Made for good food and easy math <span>•</span> TableSplit</footer>
+    </main>
+    <script src="app.js"></script>
+  </body>
+</html>
