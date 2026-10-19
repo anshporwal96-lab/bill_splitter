@@ -4,118 +4,122 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content="Split a restaurant bill by what each person ate. Tax and tip shared equally or by what you ordered." />
-    <meta name="theme-color" content="#587d6d" />
+    <meta name="theme-color" content="#0a0e13" />
+    <meta name="color-scheme" content="dark" />
     <title>TableSplit | Restaurant bill splitter</title>
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M8 8h48v40H20L8 58z' fill='%23587d6d'/%3E%3Ctext x='32' y='38' font-family='sans-serif' font-size='24' font-weight='700' text-anchor='middle' fill='white'%3ETS%3C/text%3E%3C/svg%3E" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%230a0e13'/%3E%3Cpath d='M10 12h44v32H24L10 56z' fill='%233ddc97'/%3E%3Ctext x='32' y='36' font-family='sans-serif' font-size='20' font-weight='800' text-anchor='middle' fill='%2304231a'%3ETS%3C/text%3E%3C/svg%3E" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <main class="shell">
-      <header class="hero">
-        <div class="brand-mark" aria-hidden="true">TS</div>
-        <div>
-          <p class="eyebrow">Restaurant bill splitter</p>
-          <h1>Everyone pays for <em>their</em> plate.</h1>
-          <p class="hero-copy">Add what was ordered, mark it veg or non-veg, and let TableSplit handle the fair math. Your table is saved on this device.</p>
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">TS</div>
+          <div>
+            <h1>TableSplit</h1>
+            <p class="tagline">Everyone pays for <em>their</em> plate.</p>
+          </div>
         </div>
+        <button class="button button-ghost" id="resetButton" type="button">Start new bill</button>
       </header>
 
-      <div class="layout">
-        <section class="card setup-card" aria-labelledby="peopleHeading">
-          <div class="section-heading">
-            <div>
-              <p class="step">01</p>
+      <div class="app">
+        <div class="main-col">
+          <section class="card" aria-labelledby="peopleHeading">
+            <div class="section-heading">
               <h2 id="peopleHeading">Who's at the table?</h2>
+              <span class="count-pill" id="personCount">0 people</span>
             </div>
-            <span class="count-pill" id="personCount">0 people</span>
-          </div>
-          <form class="inline-form" id="personForm" novalidate>
-            <label class="sr-only" for="personName">Person's name</label>
-            <input id="personName" type="text" placeholder="e.g. Maya" maxlength="24" autocomplete="off" />
-            <button class="button button-dark" type="submit">Add person <span>+</span></button>
-          </form>
-          <p class="form-error" id="personError" role="alert"></p>
-          <div class="people-list" id="peopleList">
-            <p class="empty-state">Add everyone sharing the bill.</p>
-          </div>
-        </section>
+            <form class="inline-form" id="personForm" novalidate>
+              <label class="sr-only" for="personName">Person's name</label>
+              <input id="personName" type="text" placeholder="Add a name, e.g. Maya" maxlength="24" autocomplete="off" />
+              <button class="button button-secondary" type="submit">Add person <span>+</span></button>
+            </form>
+            <p class="form-error" id="personError" role="alert"></p>
+            <div class="people-list" id="peopleList">
+              <p class="empty-state">Add everyone sharing the bill.</p>
+            </div>
+          </section>
 
-        <section class="card setup-card" aria-labelledby="itemsHeading">
-          <div class="section-heading">
-            <div>
-              <p class="step">02</p>
+          <section class="card" aria-labelledby="itemsHeading">
+            <div class="section-heading">
               <h2 id="itemsHeading">What did you order?</h2>
+              <span class="count-pill" id="itemCount">0 items</span>
             </div>
-            <span class="count-pill" id="itemCount">0 items</span>
-          </div>
-          <form class="item-form" id="itemForm" novalidate>
-            <div class="form-row">
-              <div class="field field-wide">
-                <label for="itemName">Dish or drink</label>
-                <input id="itemName" type="text" placeholder="e.g. Paneer tikka" maxlength="40" autocomplete="off" />
-              </div>
-              <div class="field">
-                <label for="itemPrice">Price (each)</label>
-                <div class="money-input"><span>₹</span><input id="itemPrice" type="number" inputmode="decimal" min="0.01" step="0.01" placeholder="0.00" /></div>
-              </div>
-              <div class="field quantity-field">
-                <label for="itemQuantity">Qty</label>
-                <input id="itemQuantity" type="number" inputmode="numeric" min="1" step="1" value="1" />
-              </div>
-            </div>
-            <div class="form-row item-options">
-              <fieldset class="category-picker">
-                <legend>Category</legend>
-                <label class="category-option veg-option"><input type="radio" name="category" value="veg" checked /><span class="radio-dot"></span>Veg</label>
-                <label class="category-option nonveg-option"><input type="radio" name="category" value="nonveg" /><span class="radio-dot"></span>Non-veg</label>
-              </fieldset>
-              <div class="field assign-field">
-                <div class="assign-head">
-                  <span class="assign-label" id="assignLabel">Eaten by</span>
-                  <button class="link-button" type="button" id="selectEveryone">Everyone</button>
+            <form class="item-form" id="itemForm" novalidate>
+              <div class="form-row">
+                <div class="field field-wide">
+                  <label for="itemName">Dish or drink</label>
+                  <input id="itemName" type="text" placeholder="e.g. Paneer tikka" maxlength="40" autocomplete="off" />
                 </div>
-                <div class="chip-group" id="itemPeople" role="group" aria-labelledby="assignLabel">
-                  <span class="chip-empty">Add people first</span>
+                <div class="field">
+                  <label for="itemPrice">Price (each)</label>
+                  <div class="money-input"><span>₹</span><input id="itemPrice" type="number" inputmode="decimal" min="0.01" step="0.01" placeholder="0.00" /></div>
+                </div>
+                <div class="field quantity-field">
+                  <label for="itemQuantity">Qty</label>
+                  <input id="itemQuantity" type="number" inputmode="numeric" min="1" step="1" value="1" />
                 </div>
               </div>
-            </div>
-            <p class="form-error" id="itemError" role="alert"></p>
-            <div class="form-actions">
-              <button class="button button-coral add-item-button" id="itemSubmit" type="submit">Add to the bill <span>+</span></button>
-              <button class="button button-outline cancel-edit" id="cancelEdit" type="button" hidden>Cancel</button>
-            </div>
-          </form>
-          <div class="items-list" id="itemsList">
-            <p class="empty-state">Your dishes will show up here.</p>
-          </div>
-          <div class="scan-box">
-            <div class="scan-heading">
-              <div>
-                <p class="scan-label">Long bill?</p>
-                <h3>Find food items</h3>
+              <div class="form-row item-options">
+                <fieldset class="category-picker">
+                  <legend>Category</legend>
+                  <label class="category-option veg-option"><input type="radio" name="category" value="veg" checked /><span class="radio-dot"></span>Veg</label>
+                  <label class="category-option nonveg-option"><input type="radio" name="category" value="nonveg" /><span class="radio-dot"></span>Non-veg</label>
+                </fieldset>
+                <div class="field assign-field">
+                  <div class="assign-head">
+                    <span class="assign-label" id="assignLabel">Eaten by</span>
+                    <button class="link-button" type="button" id="selectEveryone">Everyone</button>
+                  </div>
+                  <div class="chip-group" id="itemPeople" role="group" aria-labelledby="assignLabel">
+                    <span class="chip-empty">Add people first</span>
+                  </div>
+                </div>
               </div>
-              <span class="scan-icon" aria-hidden="true">⌁</span>
+              <p class="form-error" id="itemError" role="alert"></p>
+              <div class="form-actions">
+                <button class="button button-primary add-item-button" id="itemSubmit" type="submit">Add to the bill <span>+</span></button>
+                <button class="button button-ghost cancel-edit" id="cancelEdit" type="button" hidden>Cancel</button>
+              </div>
+            </form>
+            <div class="items-list" id="itemsList">
+              <p class="empty-state">Your dishes will show up here.</p>
             </div>
-            <p>Upload a clear photo and we’ll extract only the food items and their prices. The photo is read on your device and never uploaded.</p>
-            <label class="upload-button" for="billImage">Choose bill image</label>
-            <input id="billImage" type="file" accept="image/*" />
-            <div class="scan-status" id="scanStatus" aria-live="polite"></div>
-            <div class="detected-list" id="detectedList"></div>
-            <p class="scan-note" id="scanNote" hidden>Check that each price is per item, not the line total, before adding.</p>
-          </div>
-        </section>
+            <div class="scan-box">
+              <div class="scan-heading">
+                <div>
+                  <p class="scan-label">Long bill?</p>
+                  <h3>Find food items</h3>
+                </div>
+                <span class="scan-icon" aria-hidden="true">⌁</span>
+              </div>
+              <p>Upload a clear photo and we’ll extract only the food items and their prices. The photo is read on your device and never uploaded.</p>
+              <label class="upload-button" for="billImage">Choose bill image</label>
+              <input id="billImage" type="file" accept="image/*" />
+              <div class="scan-status" id="scanStatus" aria-live="polite"></div>
+              <div class="detected-list" id="detectedList"></div>
+              <p class="scan-note" id="scanNote" hidden>Check that each price is per item, not the line total, before adding.</p>
+            </div>
+          </section>
+        </div>
 
-        <section class="card summary-card" aria-labelledby="summaryHeading">
-          <div class="summary-controls">
-            <div class="section-heading summary-heading">
-              <div>
-                <p class="step">03</p>
-                <h2 id="summaryHeading">Tax, tip &amp; offers</h2>
-              </div>
-            </div>
+        <aside class="card split-panel" aria-labelledby="summaryHeading">
+          <h2 class="sr-only" id="summaryHeading">The split</h2>
+          <div class="totals" id="totals"></div>
+          <div class="actions">
+            <button class="button button-primary" id="copyButton" type="button">Copy summary</button>
+            <a class="button button-whatsapp" id="whatsappButton" href="#" target="_blank" rel="noopener noreferrer">Share on WhatsApp</a>
+          </div>
+          <p class="action-status" id="actionStatus" aria-live="polite"></p>
+          <div class="summary-table" id="summaryTable">
+            <p class="empty-state">Add people and items to see the split.</p>
+          </div>
+          <div class="charges">
+            <h3 class="charges-title">Tax, tip &amp; offers</h3>
             <div class="rate-grid">
               <div class="rate-field"><label for="taxRate">Tax</label><div class="rate-input"><input id="taxRate" type="number" inputmode="decimal" min="0" step="0.1" value="10" /><span>%</span></div></div>
               <div class="rate-field"><label for="tipRate">Tip</label><div class="rate-input"><input id="tipRate" type="number" inputmode="decimal" min="0" step="1" value="10" /><span>%</span></div></div>
@@ -128,19 +132,7 @@
               <label class="mode-option"><input type="radio" name="shareMode" value="proportional" /><span>By what each person ordered</span></label>
             </fieldset>
           </div>
-          <div class="summary-table" id="summaryTable">
-            <p class="empty-state">Add people and items to see the split.</p>
-          </div>
-          <div class="totals-column">
-            <div class="totals" id="totals"></div>
-            <div class="actions">
-              <button class="button button-dark" id="copyButton" type="button">Copy summary</button>
-              <a class="button button-whatsapp" id="whatsappButton" href="#" target="_blank" rel="noopener noreferrer">Share on WhatsApp</a>
-              <button class="button button-outline" id="resetButton" type="button">Start new bill</button>
-            </div>
-            <p class="action-status" id="actionStatus" aria-live="polite"></p>
-          </div>
-        </section>
+        </aside>
       </div>
       <footer>Made for good food and easy math <span>•</span> TableSplit</footer>
     </main>
