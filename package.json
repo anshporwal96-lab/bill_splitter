@@ -1,0 +1,9 @@
+{
+  "name": "tablesplit",
+  "version": "2.0.0",
+  "description": "Restaurant bill splitter: everyone pays for their own plate.",
+  "private": true,
+  "scripts": {
+    "test": "node --test"
+  }
+}
