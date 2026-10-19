@@ -9,6 +9,18 @@
   const TESSERACT_URL = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
   const DEFAULTS = { taxRate: 10, tipRate: 10, discountRate: 0, shareMode: "equal" };
 
+  // Every person gets their own plate colour. `on` is the readable text colour on top of it.
+  const PLATES = [
+    { bg: "#ffb400", on: "#1b1400" }, // marigold
+    { bg: "#d93a22", on: "#ffffff" }, // chilli
+    { bg: "#178a4a", on: "#ffffff" }, // leaf
+    { bg: "#3f51d9", on: "#ffffff" }, // indigo
+    { bg: "#d3277f", on: "#ffffff" }, // rani pink
+    { bg: "#0b8590", on: "#ffffff" }, // teal
+    { bg: "#7b4ddb", on: "#ffffff" }, // violet
+    { bg: "#1478cc", on: "#ffffff" }, // sky
+  ];
+
   const $ = (id) => document.getElementById(id);
   const numberFormat = new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const money = (paise) => `₹${numberFormat.format(paise / 100)}`;
@@ -18,12 +30,24 @@
   const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
   const state = { people: [], items: [], ...DEFAULTS };
-  const openPeople = new Set(); // people whose breakdown is expanded
-  let selected = new Set(); // diner ids ticked in the item form
+  let selected = new Set(); // diner ids ticked in the dish form
+  let focusId = null; // person whose plate is open in the detail panel
   let editingId = null;
   let detectedItems = [];
   let lastResult = null;
   let statusTimer = null;
+
+  const personById = (id) => state.people.find((p) => p.id === id);
+  const colorVars = (person) => {
+    const plate = PLATES[person.color % PLATES.length];
+    return `--c:${plate.bg};--on:${plate.on}`;
+  };
+
+  function nextColor() {
+    const used = new Set(state.people.map((p) => p.color));
+    for (let i = 0; i < PLATES.length; i++) if (!used.has(i)) return i;
+    return state.people.length % PLATES.length;
+  }
 
   /* ---------- persistence ---------- */
 
@@ -40,11 +64,17 @@
     return Number.isFinite(number) && number >= 0 ? Math.min(max, number) : fallback;
   }
 
+  function addPersonRecord(id, name, color) {
+    const valid = Number.isInteger(color) && color >= 0;
+    state.people.push({ id, name: name.trim().slice(0, 24), color: valid ? color % PLATES.length : nextColor() });
+  }
+
   function restore(saved) {
     if (!saved || typeof saved !== "object") return;
-    state.people = (Array.isArray(saved.people) ? saved.people : [])
+    state.people = [];
+    (Array.isArray(saved.people) ? saved.people : [])
       .filter((p) => p && typeof p.id === "string" && typeof p.name === "string" && p.name.trim())
-      .map((p) => ({ id: p.id, name: p.name.trim().slice(0, 24) }));
+      .forEach((p) => addPersonRecord(p.id, p.name, p.color));
     const ids = new Set(state.people.map((p) => p.id));
     state.items = (Array.isArray(saved.items) ? saved.items : [])
       .filter((i) => i && typeof i.name === "string" && Number(i.price) > 0)
@@ -69,9 +99,7 @@
       // Carry over the people list saved by the first version of the app.
       const legacy = JSON.parse(localStorage.getItem(LEGACY_PEOPLE_KEY) || "[]");
       if (Array.isArray(legacy)) {
-        state.people = legacy
-          .filter((p) => p && typeof p.name === "string" && p.name.trim())
-          .map((p) => ({ id: uid(), name: p.name.trim().slice(0, 24) }));
+        legacy.filter((p) => p && typeof p.name === "string" && p.name.trim()).forEach((p) => addPersonRecord(uid(), p.name));
       }
     } catch (error) {
       try { localStorage.removeItem(STORAGE_KEY); } catch (ignored) { /* nothing to do */ }
@@ -89,19 +117,13 @@
 
   function renderPeople() {
     $("personCount").textContent = plural(state.people.length, "person", "people");
-    $("peopleList").innerHTML = state.people.length
-      ? state.people.map((person) => `<div class="person-row">
-          <div class="person-info"><span class="avatar">${escapeHtml(person.name.slice(0, 2).toUpperCase())}</span><span class="person-name">${escapeHtml(person.name)}</span></div>
-          <button class="delete-button" type="button" aria-label="Remove ${escapeHtml(person.name)}" data-remove-person="${escapeHtml(person.id)}">&times;</button>
-        </div>`).join("")
-      : '<p class="empty-state">Add everyone sharing the bill.</p>';
     renderChips();
   }
 
   function renderChips() {
-    selected = new Set([...selected].filter((id) => state.people.some((p) => p.id === id)));
+    selected = new Set([...selected].filter((id) => personById(id)));
     $("itemPeople").innerHTML = state.people.length
-      ? state.people.map((person) => `<label class="chip"><input type="checkbox" value="${escapeHtml(person.id)}" ${selected.has(person.id) ? "checked" : ""} /><span>${escapeHtml(person.name)}</span></label>`).join("")
+      ? state.people.map((person) => `<label class="chip" style="${colorVars(person)}"><input type="checkbox" value="${escapeHtml(person.id)}" ${selected.has(person.id) ? "checked" : ""} /><span>${escapeHtml(person.name)}</span></label>`).join("")
       : '<span class="chip-empty">Add people first</span>';
     const everyone = $("selectEveryone");
     everyone.hidden = !state.people.length;
@@ -112,16 +134,18 @@
     $("itemCount").textContent = plural(state.items.length, "item", "items");
     $("itemsList").innerHTML = state.items.length
       ? state.items.map((item) => {
-          const names = item.people.map((id) => state.people.find((p) => p.id === id)?.name).filter(Boolean);
+          const eaters = item.people.map(personById).filter(Boolean);
           const line = toPaise(item.price) * item.quantity;
+          const dots = eaters.map((p) => `<i class="dot" style="${colorVars(p)}"></i>`).join("");
           return `<div class="item-row${item.id === editingId ? " is-editing" : ""}">
-            <div class="item-info"><span class="item-tag ${item.category}">${item.category === "veg" ? "VEG" : "NON-VEG"}</span><div class="item-text"><div class="item-name">${escapeHtml(item.name)}</div><span class="summary-detail${names.length ? "" : " warn"}">${escapeHtml(names.length ? names.join(", ") : "No one assigned")}</span></div></div>
-            <div class="item-info"><div class="item-amount"><span class="item-price">${money(line)}</span>${item.quantity > 1 ? `<span class="summary-detail">${item.quantity} × ${money(toPaise(item.price))}</span>` : ""}</div>
-              <button class="icon-button" type="button" aria-label="Edit ${escapeHtml(item.name)}" data-edit-item="${escapeHtml(item.id)}">Edit</button>
+            <span class="diet ${item.category}" role="img" aria-label="${item.category === "veg" ? "Vegetarian" : "Non-vegetarian"}"></span>
+            <div class="item-text"><div class="item-name">${escapeHtml(item.name)}</div><div class="item-meta">${dots ? `<span class="eaters">${dots}</span>` : ""}<span class="summary-detail${eaters.length ? "" : " warn"}">${escapeHtml(eaters.length ? eaters.map((p) => p.name).join(", ") : "No one assigned")}</span></div></div>
+            <div class="item-amount"><span class="item-price">${money(line)}</span>${item.quantity > 1 ? `<span class="summary-detail">${item.quantity} × ${money(toPaise(item.price))}</span>` : ""}</div>
+            <div class="item-actions"><button class="icon-button" type="button" aria-label="Edit ${escapeHtml(item.name)}" data-edit-item="${escapeHtml(item.id)}">Edit</button>
               <button class="delete-button" type="button" aria-label="Remove ${escapeHtml(item.name)}" data-remove-item="${escapeHtml(item.id)}">&times;</button></div>
           </div>`;
         }).join("")
-      : '<p class="empty-state">Your dishes will show up here.</p>';
+      : '<p class="empty-state">Dishes you add will be listed here.</p>';
   }
 
   const hasBill = () => state.people.length > 0 && state.items.length > 0;
@@ -137,38 +161,63 @@
     });
   }
 
+  function renderTable(result) {
+    const people = result.perPerson;
+    const maxTotal = Math.max(0, ...people.map((p) => p.total));
+    if (!people.some((p) => p.id === focusId)) focusId = people.length ? people[0].id : null;
+
+    // Plates grow with what each person owes, so the table shows who ate most at a glance.
+    $("peopleList").innerHTML = people.length
+      ? people.map((person) => {
+          const meta = personById(person.id);
+          const size = maxTotal > 0 ? Math.round(98 + 54 * Math.sqrt(person.total / maxTotal)) : 118;
+          const name = escapeHtml(person.name);
+          return `<div class="plate-wrap" style="--d:${size}px;${colorVars(meta)}">
+            <button type="button" class="plate${person.id === focusId ? " is-focus" : ""}" data-plate="${escapeHtml(person.id)}" aria-pressed="${person.id === focusId}" aria-label="${name}${maxTotal > 0 ? `, ${money(person.total)}` : ""}. Show what is on this plate">
+              <span class="plate-name">${name}</span>${maxTotal > 0 ? `<span class="plate-amount">${money(person.total)}</span>` : ""}
+            </button>
+            <button type="button" class="plate-remove" aria-label="Remove ${name}" data-remove-person="${escapeHtml(person.id)}">&times;</button>
+          </div>`;
+        }).join("")
+      : '<div class="ghost-plates" aria-hidden="true"><i></i><i></i><i></i></div><p class="empty-state">Add the people sharing this bill. Each person gets a plate.</p>';
+
+    const focus = people.find((p) => p.id === focusId);
+    let html = "";
+    if (focus) {
+      const name = escapeHtml(focus.name);
+      const dishLines = focus.lines.map((line) => `<li><span>${escapeHtml(line.name)}${line.quantity > 1 ? ` ×${line.quantity}` : ""}${line.sharedWith > 1 ? ` <small>shared by ${line.sharedWith}</small>` : ""}</span><span>${money(line.share)}</span></li>`).join("");
+      html += `<div class="detail-card" style="${colorVars(personById(focus.id))}">
+        <div class="detail-head"><h3>${name}’s plate</h3><strong>${money(focus.total)}</strong></div>
+        ${focus.lines.length
+          ? `<ul class="breakdown">${dishLines}
+              ${focus.discount ? `<li class="muted"><span>Discount</span><span>−${money(focus.discount)}</span></li>` : ""}
+              <li class="muted"><span>Tax</span><span>${money(focus.tax)}</span></li>
+              <li class="muted"><span>Tip</span><span>${money(focus.tip)}</span></li>
+            </ul>
+            <p class="detail-note">Tax and tip ${state.shareMode === "proportional" ? "follow what each person ordered." : "are shared equally."}</p>`
+          : `<p class="empty-state">Nothing on this plate yet. Tick ${name} on a dish to add it.</p>`}
+      </div>`;
+    }
+    const orphans = state.items.filter((item) => !item.people.length).map((item) => item.name);
+    if (result.unassigned > 0) {
+      html += `<div class="warning" role="status"><strong>${money(result.unassigned)}</strong> isn’t on anyone’s plate (${escapeHtml(orphans.join(", "))}). Edit ${orphans.length === 1 ? "that dish" : "those dishes"} so every rupee has an owner.</div>`;
+    }
+    $("summaryTable").innerHTML = html;
+    $("summaryTable").hidden = !html;
+  }
+
   function renderSummary() {
     const result = (lastResult = compute());
-    const modeText = state.shareMode === "proportional" ? "tax and tip by food ordered" : "tax and tip shared equally";
 
     $("totals").innerHTML = [
-      `<div><span>Food total</span><strong>${money(result.foodTotal)}</strong></div>`,
+      `<div><span>Food</span><strong>${money(result.foodTotal)}</strong></div>`,
       result.discount ? `<div><span>Discount <small>(${state.discountRate}%)</small></span><strong>−${money(result.discount)}</strong></div>` : "",
       `<div><span>Tax <small>(${state.taxRate}%)</small></span><strong>${money(result.tax)}</strong></div>`,
       `<div><span>Tip <small>(${state.tipRate}%)</small></span><strong>${money(result.tip)}</strong></div>`,
-      `<div class="grand-total"><span>Total bill</span><strong>${money(result.grandTotal)}</strong></div>`,
+      `<div class="grand-total"><span>Total bill</span><strong><mark>${money(result.grandTotal)}</mark></strong></div>`,
     ].join("");
 
-    if (!state.people.length) {
-      $("summaryTable").innerHTML = '<p class="empty-state">Add people and items to see the split.</p>';
-    } else {
-      const rows = result.perPerson.map((person) => {
-        const dishLines = person.lines.map((line) => `<li><span>${escapeHtml(line.name)}${line.quantity > 1 ? ` ×${line.quantity}` : ""}${line.sharedWith > 1 ? ` <small>shared by ${line.sharedWith}</small>` : ""}</span><span>${money(line.share)}</span></li>`).join("");
-        return `<details class="summary-row" data-person="${escapeHtml(person.id)}"${openPeople.has(person.id) ? " open" : ""}>
-          <summary><div><span class="summary-person">${escapeHtml(person.name)}</span><span class="summary-detail">${person.lines.length ? `${plural(person.lines.length, "item", "items")} · ${modeText}` : "No items assigned"}</span></div><span class="summary-amount">${money(person.total)}</span></summary>
-          <ul class="breakdown">${dishLines}
-            ${person.discount ? `<li class="muted"><span>Discount</span><span>−${money(person.discount)}</span></li>` : ""}
-            <li class="muted"><span>Tax</span><span>${money(person.tax)}</span></li>
-            <li class="muted"><span>Tip</span><span>${money(person.tip)}</span></li>
-          </ul>
-        </details>`;
-      }).join("");
-      const orphans = state.items.filter((item) => !item.people.length).map((item) => item.name);
-      const warning = result.unassigned > 0
-        ? `<div class="warning" role="status"><strong>${money(result.unassigned)}</strong> isn’t assigned to anyone (${escapeHtml(orphans.join(", "))}). Edit ${orphans.length === 1 ? "that item" : "those items"} so every rupee lands on someone.</div>`
-        : "";
-      $("summaryTable").innerHTML = rows + warning;
-    }
+    renderTable(result);
 
     const copy = $("copyButton");
     const share = $("whatsappButton");
@@ -186,7 +235,7 @@
 
   function buildSummaryText(result) {
     const date = new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
-    const lines = [`TableSplit · ${date}`, ""];
+    const lines = [`TableSplit, ${date}`, ""];
     result.perPerson.forEach((person) => lines.push(`${person.name}: ${money(person.total)}`));
     if (result.unassigned > 0) lines.push(`Unassigned food: ${money(result.unassigned)}`);
     lines.push("", `Food ${money(result.foodTotal)}`);
@@ -219,7 +268,7 @@
 
   function exitEdit() {
     editingId = null;
-    $("itemSubmit").innerHTML = "Add to the bill <span>+</span>";
+    $("itemSubmit").textContent = "Add dish";
     $("cancelEdit").hidden = true;
     clearItemForm();
     renderItems();
@@ -235,7 +284,7 @@
       return showError("personError", `${name} is already at the table. Add a last initial to tell them apart.`);
     }
     showError("personError", "");
-    state.people.push({ id: uid(), name });
+    addPersonRecord(uid(), name);
     save();
     $("personName").value = "";
     renderAll();
@@ -244,13 +293,13 @@
   $("personName").addEventListener("input", () => showError("personError", ""));
 
   function removePerson(id) {
-    const person = state.people.find((p) => p.id === id);
+    const person = personById(id);
     if (!person) return;
     const dishes = state.items.filter((item) => item.people.includes(id)).length;
-    if (dishes && !window.confirm(`Remove ${person.name}? ${plural(dishes, "dish is", "dishes are")} assigned to them.`)) return;
+    if (dishes && !window.confirm(`Remove ${person.name}? ${plural(dishes, "dish is", "dishes are")} on their plate.`)) return;
     state.people = state.people.filter((p) => p.id !== id);
     state.items.forEach((item) => { item.people = item.people.filter((pid) => pid !== id); });
-    openPeople.delete(id);
+    if (focusId === id) focusId = null;
     save();
     renderAll();
   }
@@ -278,14 +327,14 @@
     const price = Number($("itemPrice").value);
     const quantity = Math.max(1, Math.floor(Number($("itemQuantity").value) || 1));
     let problem = null;
-    let focusId = null;
-    if (!name) { problem = "Enter the dish or drink name."; focusId = "itemName"; }
-    else if (!(price > 0)) { problem = "Enter a price above zero."; focusId = "itemPrice"; }
-    else if (!state.people.length) { problem = "Add at least one person first."; focusId = "personName"; }
+    let focusField = null;
+    if (!name) { problem = "Enter the dish or drink name."; focusField = "itemName"; }
+    else if (!(price > 0)) { problem = "Enter a price above zero."; focusField = "itemPrice"; }
+    else if (!state.people.length) { problem = "Add at least one person first."; focusField = "personName"; }
     else if (!selected.size) { problem = "Tap the names of everyone who ate this."; }
     if (problem) {
       showError("itemError", problem);
-      if (focusId) $(focusId).focus();
+      if (focusField) $(focusField).focus();
       return;
     }
     showError("itemError", "");
@@ -318,7 +367,7 @@
     document.querySelector(`input[name="category"][value="${item.category}"]`).checked = true;
     selected = new Set(item.people);
     renderChips();
-    $("itemSubmit").innerHTML = "Save changes";
+    $("itemSubmit").textContent = "Save dish";
     $("cancelEdit").hidden = false;
     showError("itemError", "");
     renderItems();
@@ -337,10 +386,15 @@
   }
 
   document.addEventListener("click", (event) => {
+    const plateButton = event.target.closest("[data-plate]");
     const personButton = event.target.closest("[data-remove-person]");
     const itemButton = event.target.closest("[data-remove-item]");
     const editButton = event.target.closest("[data-edit-item]");
-    if (personButton) removePerson(personButton.dataset.removePerson);
+    if (plateButton) {
+      focusId = plateButton.dataset.plate;
+      renderSummary();
+      document.querySelector(`[data-plate="${CSS.escape(focusId)}"]`)?.focus();
+    } else if (personButton) removePerson(personButton.dataset.removePerson);
     else if (itemButton) removeItem(itemButton.dataset.removeItem);
     else if (editButton) startEdit(editButton.dataset.editItem);
   });
@@ -363,13 +417,6 @@
       renderSummary();
     });
   });
-
-  // <details> toggle events don't bubble, so listen in the capture phase.
-  $("summaryTable").addEventListener("toggle", (event) => {
-    const id = event.target.dataset?.person;
-    if (!id) return;
-    if (event.target.open) openPeople.add(id); else openPeople.delete(id);
-  }, true);
 
   $("copyButton").addEventListener("click", async () => {
     if (!hasBill()) return;
@@ -480,7 +527,7 @@
     $("itemName").focus();
     item.used = true;
     renderDetectedItems();
-    $("scanStatus").textContent = `${item.name} marked as Used. Tap who ate it, then add it to the bill.`;
+    $("scanStatus").textContent = `${item.name} marked as used. Tap who ate it, then add the dish.`;
   });
 
   /* ---------- start ---------- */
